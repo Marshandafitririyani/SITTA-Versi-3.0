@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SITTA UT - Sistem Pemesanan Bahan Ajar</title>
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    />
+
+    <script src="js/api.js"></script>
+    <link rel="stylesheet" href="css/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+  </head>
+  <body>
+    <div id="app">
+      <header class="navbar">
+        <div class="logo-section">
+          <img
+            src="assets/logo_univ.jpeg"
+            alt="Logo UT"
+            onerror="this.src = 'https://via.placeholder.com/45'"
+          />
+          <div class="logo-text">
+            <h1>SITTA</h1>
+            <h2>UNIVERSITAS TERBUKA</h2>
+            <p>Sistem Informasi Tugas Tutorial dan Administrasi</p>
+          </div>
+        </div>
+
+        <nav class="nav-tabs">
+          <button
+            :class="{ active: currentTab === 'stok' }"
+            @click="currentTab = 'stok'"
+          >
+            📦 Halaman Stok
+          </button>
+          <button
+            :class="{ active: currentTab === 'tracking' }"
+            @click="currentTab = 'tracking'"
+          >
+            🚚 Tracking DO
+          </button>
+        </nav>
+      </header>
+
+      <main class="container">
+        <div v-if="currentTab === 'stok'">
+          <ba-stock-table></ba-stock-table>
+        </div>
+
+        <div v-else-if="currentTab === 'tracking'">
+          <do-tracking></do-tracking>
+        </div>
+      </main>
+    </div>
+
+    <script type="text/x-template" id="tpl-status-badge">
+      <span :class="['badge-status', badgeClass]">
+          {{ statusText }}
+          <span class="info-icon-trigger" v-if="catatan">
+              <i class="fas fa-info-circle"></i>
+              <span class="tooltip-box" v-html="catatan"></span>
+          </span>
+      </span>
+    </script>
+
+    <script type="text/x-template" id="tpl-stock">
+        <div class="card animate-fade-in" style="margin-top: 20px;">
+            <div class="card-header-title">
+                <h3><i class="fas fa-warehouse"></i> Manajemen & Monitoring Stok Bahan Ajar</h3>
+            </div>
+
+            <div class="control-panel">
+                <div class="filter-row">
+                    <div class="control-item">
+                        <label>UT Daerah:</label>
+                        <select v-model="filters.upbjj" @change="resetKategori">
+                            <option value="">-- Semua Wilayah --</option>
+                            <option v-for="area in upbjjList" :key="area" :value="area">{{ area }}</option>
+                        </select>
+                    </div>
+
+                    <div class="control-item">
+                        <label>Kategori Buku:</label>
+                        <select v-model="filters.kategori">
+                            <option value="">-- Semua Kategori --</option>
+                            <option v-for="kat in kategoriList" :key="kat" :value="kat">{{ kat }}</option>
+                        </select>
+                    </div>
+
+                    <div class="control-item">
+                        <label>Kondisi Gudang:</label>
+                        <select v-model="filters.kondisi">
+                            <option value="">Semua Kondisi</option>
+                            <option value="reorder">⚠️ Perlu Re-order (Stok &lt; Safety)</option>
+                        </select>
+                    </div>
+
+                    <div class="control-item">
+                        <label>Urutkan:</label>
+                        <select v-model="sortBy">
+                            <option value="judul">Judul (A-Z)</option>
+                            <option value="qty">Jumlah Stok</option>
+                            <option value="harga">Harga Buku</option>
+                        </select>
+                    </div>
+
+                    <div class="control-item btn-align">
+                        <button @click="resetFilters" class="btn btn-secondary"><i class="fas fa-sync-alt"></i> Reset</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section-box">
+                <h4 class="section-form-title">
+                    <i class="fas fa-edit"></i> {{ isEdit ? 'Update / Ubah Data' : 'Tambah Data Bahan Ajar Baru' }}
+                </h4>
+                <div v-if="formError" class="alert-box error"><i class="fas fa-exclamation-triangle"></i> {{ formError }}</div>
+
+                <div class="form-grid-layout">
+          <div class="form-group">
+              <label class="form-label">Kode Mata Kuliah</label>
+              <input type="text" placeholder="e.g. EKMA4116" v-model="form.kode" :disabled="isEdit" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Judul Mata Kuliah</label>
+              <input type="text" placeholder="Masukkan judul mata kuliah" v-model="form.judul" @keyup.enter="saveData" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Kategori Buku</label>
+              <input type="text" placeholder="Masukkan kategori" v-model="form.kategori" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">UT-Daerah</label>
+              <input type="text" placeholder="Masukkan nama daerah" v-model="form.upbjj" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Lokasi Nomor Rak</label>
+              <input type="text" placeholder="e.g. R2-C1" v-model="form.lokasiRak" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Harga Satuan (Rp)</label>
+              <input type="number" placeholder="0" v-model.number="form.harga" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Stok Sekarang (Qty)</label>
+              <input type="number" placeholder="0" v-model.number="form.qty" class="custom-input">
+          </div>
+
+          <div class="form-group">
+              <label class="form-label">Safety Stock</label>
+              <input type="number" placeholder="0" v-model.number="form.safety" class="custom-input">
+          </div>
+      </div>
+
+                <div style="text-align: right; margin-top: 15px;">
+                    <button @click="saveData" class="btn btn-primary"><i class="fas fa-save"></i> Simpan Data (Enter)</button>
+                    <button v-if="isEdit" @click="cancelEdit" class="btn btn-secondary" style="margin-left:8px;">Batal</button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Kode & Judul MK</th>
+                            <th>Kategori</th>
+                            <th>UT-Daerah</th>
+                            <th>Lokasi Rak</th>
+                            <th>Harga Buku</th>
+                            <th>Stok Aktual / Safety</th>
+                            <th>Status Gudang</th>
+                            <th>Cover Buku</th>
+                            <th style="text-align: center;">Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in filteredAndSortedStocks" :key="item.kode" class="table-row-hover">
+                            <td style="text-align: left; padding-left: 12px;">
+                                <div class="book-details">
+                                    <strong>{{ item.kode }}</strong><br>
+                                    <span class="text-muted">{{ item.judul }}</span>
+                                </div>
+                            </td>
+                            <td>{{ item.kategori }}</td>
+                            <td>{{ item.upbjj }}</td>
+                            <td><span class="rak-tag">{{ item.lokasiRak }}</span></td>
+                            <td>{{ item.harga | formatRupiah }}</td>
+                            <td>{{ item.qty | formatBuah }} / <small class="text-muted">{{ item.safety | formatBuah }}</small></td>
+                            <td>
+                                <ba-status-badge :qty="item.qty" :safety="item.safety" :catatan="item.catatanHTML"></ba-status-badge>
+                            </td>
+                            <td>
+                                <img :src="item.image || 'https://via.placeholder.com/50x65'" alt="Cover Buku" style="width: 45px; height: auto; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); vertical-align: middle;">
+                            </td>
+                            <td>
+                                <div class="action-buttons" style="display: flex; gap: 6px; justify-content: center; align-items: center;">
+                                    <button @click="editData(item)" class="btn-icon edit-btn" title="Edit" style="border: none; background: #ff9f1c; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer;"><i class="fas fa-pencil-alt"></i></button>
+                                    <button @click="deleteData(item.kode)" class="btn-icon delete-btn" title="Hapus" style="border: none; background: #e71d36; color: white; padding: 6px 10px; border-radius: 4px; cursor: pointer;"><i class="fas fa-trash-alt"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="filteredAndSortedStocks.length === 0">
+                            <td colspan="9" style="text-align:center; padding:20px; color:#999;">Data tidak ditemukan berdasarkan kriteria pencarian.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/x-template" id="tpl-tracking">
+      <div class="animate-fade-in" style="margin-top: 10px;">
+          <h2 class="page-title">
+              <i class="fas fa-route"></i> Tracing Pengiriman Bahan Ajar
+          </h2>
+
+          <div class="card form-container animate-fade-in">
+              <div class="input-group">
+                  <label><i class="fas fa-search"></i> Nomor DO / NIM Mahasiswa:</label>
+                  <div style="display: flex; gap: 10px; margin-top: 8px">
+                      <input type="text"
+                             v-model="searchQuery"
+                             placeholder="Contoh: DO2025-0001 atau NIM"
+                             @keyup.enter="performSearch"
+                             @keyup.esc="clearSearch"
+                             class="custom-input" />
+                      <button class="btn-submit-yellow" @click="performSearch">
+                          <i class="fas fa-search"></i> Cari Data
+                      </button>
+                  </div>
+              </div>
+          </div>
+
+          <div v-if="searchResults.length > 0" class="animate-fade-in">
+              <div v-for="doItem in searchResults" :key="doItem.noDO" style="margin-bottom: 30px;">
+
+                  <div class="tracking-header-blue">
+                      <div class="header-left">
+                          <h2>{{ doItem.nama }}</h2>
+                          <p class="nim-badge">
+                              <i class="fas fa-user-graduate"></i> {{ doItem.nim }}
+                          </p>
+                          <p class="header-route">
+                              <i class="fas fa-box-open"></i> {{ doItem.paket }}
+                          </p>
+                          <p class="header-address">
+                              <i class="fas fa-truck-loading"></i> Status: {{ doItem.status }}
+                          </p>
+                      </div>
+                      <div class="header-right">
+                          <p>
+                              <i class="far fa-calendar-alt"></i> Tanggal Kirim: {{ doItem.tanggalKirim }}<br />
+                              <span class="badge-ekspedisi">
+                                  <i class="fas fa-shipping-fast"></i> {{ doItem.ekspedisi }}
+                              </span>
+                          </p>
+                      </div>
+                  </div>
+
+                  <div class="journey-container">
+                      <p class="journey-title">
+                          <i class="fas fa-history"></i> Perjalanan Paket ({{ doItem.noDO }})
+                      </p>
+                      <ul class="timeline">
+                          <li v-for="(step, i) in doItem.perjalanan" :key="i" class="timeline-item">
+                              <div class="timeline-dot"></div>
+                              <div class="timeline-content">
+                                  <p>{{ step.keterangan }}</p>
+                                  <span v-if="i === 0">Pengirim: UNIVERSITAS TERBUKA</span>
+                              </div>
+                              <div class="timeline-time">{{ step.waktu }}</div>
+                          </li>
+                      </ul>
+
+                      <div class="update-log-form" style="margin-top: 25px; border-top: 1px solid #eee; padding-top: 15px;">
+                          <input type="text" placeholder="Update rincian lokasi atau status kurir terbaru..." v-model="newLogText[doItem.noDO]" class="custom-input" style="flex: 1;">
+                          <button @click="addTrackingLog(doItem.noDO)" class="btn-submit-blue">
+                              <i class="fas fa-plus"></i> Update Status
+                          </button>
+                      </div>
+                  </div>
+
+              </div>
+          </div>
+
+          <div class="card form-container animate-fade-in" style="margin-top: 30px; border-top: 4px solid #0056b3">
+              <h3 class="section-form-title">
+                  <i class="fas fa-plus-circle"></i> Input Delivery Order (DO) Baru
+              </h3>
+
+              <div class="form-grid">
+                  <div class="input-group">
+                      <label>Nomor DO (Tergenerate Otomatis)</label>
+                      <input type="text" :value="nextDONumber" disabled class="custom-input disabled-input" />
+                  </div>
+
+                  <div class="input-group">
+                      <label>Tanggal Kirim</label>
+                      <input type="text" v-model="newDO.tanggalKirim" placeholder="Otomatis waktu lokal jika kosong" class="custom-input" />
+                  </div>
+
+                  <div class="input-group">
+                      <label>NIM Mahasiswa</label>
+                      <input type="text" v-model="newDO.nim" placeholder="Masukkan NIM Mahasiswa" class="custom-input" />
+                  </div>
+
+                  <div class="input-group">
+                      <label>Nama Mahasiswa</label>
+                      <input type="text" v-model="newDO.nama" placeholder="Masukkan Nama Lengkap" class="custom-input" />
+                  </div>
+
+                  <div class="input-group">
+                      <label>Ekspedisi</label>
+                      <select v-model="newDO.ekspedisi" class="custom-input">
+                          <option value="" disabled>-- Pilih Ekspedisi --</option>
+                          <option v-for="ekspedisi in ekspedisiOptions" :key="ekspedisi" :value="ekspedisi">
+                              {{ ekspedisi }}
+                          </option>
+                      </select>
+                  </div>
+
+                  <div class="input-group">
+                      <label>Paket Bahan Ajar</label>
+                      <select v-model="selectedPaketIndex" class="custom-input">
+                          <option value="-1" disabled>-- Pilih Paket Bundling --</option>
+                          <option v-for="(pkt, index) in paketOptions" :key="pkt.kode" :value="index">
+                              {{ pkt.kode }} - {{ pkt.nama }}
+                          </option>
+                      </select>
+                  </div>
+              </div>
+
+              <div v-if="selectedPaketIndex !== -1" class="paket-detail-box">
+                  <h4>
+                      <i class="fas fa-info-circle"></i> Detail Isi {{ paketOptions[selectedPaketIndex].kode }}:
+                  </h4>
+                  <p>Modul bundling: <strong>{{ paketOptions[selectedPaketIndex].isi.join(', ') }}</strong></p>
+                  <div class="paket-price-tag">
+                      Harga Bundling: <span>{{ paketOptions[selectedPaketIndex].harga | formatRupiah }}</span>
+                  </div>
+              </div>
+
+              <div style="text-align: right; margin-top: 20px">
+                  <button class="btn-submit-blue" @click="createNewDO">
+                      <i class="fas fa-save"></i> Simpan Data DO
+                  </button>
+              </div>
+          </div>
+
+          <h3 class="sub-title" style="margin-top: 40px">
+              <i class="fas fa-list-alt"></i> Daftar Keseluruhan Tracking DO
+          </h3>
+
+          <div class="table-container card animate-fade-in">
+              <table class="data-table">
+                  <thead>
+                      <tr>
+                          <th>Nomor DO</th>
+                          <th>NIM</th>
+                          <th>Nama Mahasiswa</th>
+                          <th>Ekspedisi</th>
+                          <th>Paket</th>
+                          <th>Tanggal Kirim</th>
+                          <th>Total Nilai</th>
+                      </tr>
+                  </thead>
+                  <tbody>
+                      <tr v-for="detail in doRecords" :key="detail.noDO" class="table-row-hover">
+                          <td style="font-weight: bold; color: #0056b3">{{ detail.noDO }}</td>
+                          <td>{{ detail.nim }}</td>
+                          <td><i class="far fa-user text-muted"></i> {{ detail.nama }}</td>
+                          <td>
+                              <span class="badge-ekspedisi-table">{{ detail.ekspedisi }}</span>
+                          </td>
+                          <td><small class="rak-tag">{{ detail.paket }}</small></td>
+                          <td>{{ detail.tanggalKirim }}</td>
+                          <td style="font-weight: 600; color: #2e7d32">
+                              {{ detail.total | formatRupiah }}
+                          </td>
+                      </tr>
+                      <tr v-if="doRecords.length === 0">
+                          <td colspan="7" style="text-align: center; padding: 30px; color: #888">
+                              <i class="fas fa-folder-open" style="font-size: 24px; display: block; margin-bottom: 10px"></i>
+                              Belum ada data transaksi dokumen pengiriman.
+                          </td>
+                      </tr>
+                  </tbody>
+              </table>
+          </div>
+      </div>
+    </script>
+
+    <script src="js/services/api.js"></script>
+    <script src="js/components/status-badge.js"></script>
+    <script src="js/components/stock-table.js"></script>
+    <script src="js/components/do-tracking.js"></script>
+    <script src="js/app.js"></script>
+  </body>
+</html>
