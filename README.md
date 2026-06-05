@@ -51,3 +51,6 @@ Aplikasi ini dilengkapi dengan fitur-fitur utama yang mendukung efisiensi operas
 │   └── app.js              # Konfigurasi dan mounting Utama Vue Instance
 ├── index.html              # File HTML utama (Template komponen Vue)
 └── README.md               # Dokumentasi proyek
+
+Deployment 
+https://marshandafitririyani.github.io/SITTA-Versi-3.0/
